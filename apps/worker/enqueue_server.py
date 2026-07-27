@@ -79,8 +79,12 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             days = max(1, min(int(data.get("days") or 45), 365))
             max_pages = max(1, min(int(data.get("max_pages") or 40), 100))
-            date_to = date.today()
-            date_from = date_to - timedelta(days=days)
+            today = date.today()
+            # 巨潮允许晚间公告归入“次一日/次一交易日”。周五晚间可能直接
+            # 归入下周一，因此同步窗口向未来放宽 7 天，避免漏掉已上线但
+            # 披露日期晚于服务器当天的公告。
+            date_to = today + timedelta(days=7)
+            date_from = today - timedelta(days=days)
             results = []
             total_synced = 0
 
