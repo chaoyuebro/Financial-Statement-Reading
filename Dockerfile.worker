@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir pymupdf psycopg2-binary minio "fastembed>=0.7,<1"
 # 复制 worker 源码（含预研归档 preresearch/ 与抽取逻辑 extractors/）
 COPY apps/worker/ ./apps/worker/
 COPY scripts/sync_cninfo_reports.py ./scripts/sync_cninfo_reports.py
+COPY scripts/backfill_cninfo_catalog.py ./scripts/backfill_cninfo_catalog.py
 
 WORKDIR /app/apps/worker
 # 默认命令由 compose 覆盖为 rq worker；此处兜底

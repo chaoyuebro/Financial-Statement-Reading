@@ -97,6 +97,10 @@ if [[ "$worker_changed" == "1" ]]; then
       docker exec fr_worker mkdir -p /app/scripts
       docker cp "$APP_DIR/scripts/sync_cninfo_reports.py" fr_worker:/app/scripts/sync_cninfo_reports.py
     fi
+    if [[ -f "$APP_DIR/scripts/backfill_cninfo_catalog.py" ]]; then
+      docker exec fr_worker mkdir -p /app/scripts
+      docker cp "$APP_DIR/scripts/backfill_cninfo_catalog.py" fr_worker:/app/scripts/backfill_cninfo_catalog.py
+    fi
     docker restart fr_worker >/dev/null
   fi
 fi
