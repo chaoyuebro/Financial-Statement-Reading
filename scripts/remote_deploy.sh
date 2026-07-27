@@ -68,7 +68,9 @@ if ss -lnt | grep -q '127.0.0.1:7897'; then
   )
 fi
 
-export DOCKER_BUILDKIT=1
+# 当前 Ubuntu Docker 未安装 buildx；增量镜像直接继承现有生产镜像，
+# 即使使用传统构建器也不会执行 npm ci。
+export DOCKER_BUILDKIT=0
 
 if [[ "$web_changed" == "1" ]]; then
   if [[ "$web_deps_changed" == "1" ]] || ! docker image inspect infra-web:latest >/dev/null 2>&1; then
