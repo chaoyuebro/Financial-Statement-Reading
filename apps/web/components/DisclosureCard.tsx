@@ -17,7 +17,7 @@ export function DisclosureCard({ item, active, tabIndex, onActivate, onFocus }: 
       tabIndex={tabIndex}
       onClick={onActivate}
       onFocus={onFocus}
-      aria-label={`${item.companyName} ${TYPE_LABELS[item.type]} ${item.reportPeriod}，披露日期 ${item.disclosureDate}`}
+      aria-label={`${item.companyName} ${TYPE_LABELS[item.type]} ${item.reportPeriod}${item.isRevised ? '，更正后' : ''}，披露日期 ${item.disclosureDate}`}
       className={
         'block w-full rounded-lg border px-4 py-3 text-left transition-colors ' +
         (active ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-surface-muted')
@@ -28,9 +28,16 @@ export function DisclosureCard({ item, active, tabIndex, onActivate, onFocus }: 
           <span className="font-medium text-ink">{item.companyName}</span>{' '}
           <span className="text-sm text-ink-soft">{item.companyCode}</span>
         </div>
-        <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-0.5 text-xs text-ink-soft">
-          {TYPE_LABELS[item.type]}
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {item.isRevised && (
+            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+              更正后
+            </span>
+          )}
+          <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-xs text-ink-soft">
+            {TYPE_LABELS[item.type]}
+          </span>
+        </div>
       </div>
       <div className="mt-1 text-sm text-ink-soft">
         报告期 {item.reportPeriod} · 披露 {item.disclosureDate} · {STATUS_LABELS[item.status]}

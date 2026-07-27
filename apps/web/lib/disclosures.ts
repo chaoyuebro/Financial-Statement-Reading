@@ -108,6 +108,18 @@ export async function listDisclosures(params: ListQueryParams): Promise<ListResp
       r.id            AS "id",
       c.name          AS "companyName",
       c.code          AS "companyCode",
+      COALESCE(
+        (SELECT d.title FROM disclosures d
+         WHERE d.report_id = r.id AND d.is_current_version = true LIMIT 1),
+        r.title,
+        ''
+      ) AS "title",
+      COALESCE(
+        (SELECT d.title FROM disclosures d
+         WHERE d.report_id = r.id AND d.is_current_version = true LIMIT 1),
+        r.title,
+        ''
+      ) ~ '(更正|修订)(后|版)' AS "isRevised",
       r.type          AS "type",
       r.report_period AS "reportPeriod",
       to_char(r.disclosure_date, 'YYYY-MM-DD') AS "disclosureDate",
@@ -142,6 +154,18 @@ export async function getDisclosureDetail(id: string): Promise<DisclosureDetail 
       r.id            AS "id",
       c.name          AS "companyName",
       c.code          AS "companyCode",
+      COALESCE(
+        (SELECT d.title FROM disclosures d
+         WHERE d.report_id = r.id AND d.is_current_version = true LIMIT 1),
+        r.title,
+        ''
+      ) AS "title",
+      COALESCE(
+        (SELECT d.title FROM disclosures d
+         WHERE d.report_id = r.id AND d.is_current_version = true LIMIT 1),
+        r.title,
+        ''
+      ) ~ '(更正|修订)(后|版)' AS "isRevised",
       r.type          AS "type",
       r.report_period AS "reportPeriod",
       to_char(r.disclosure_date, 'YYYY-MM-DD') AS "disclosureDate",

@@ -32,6 +32,8 @@ export interface DisclosureListItem {
   id: string; // reports.id（内部 UUID，全系统引用锚点）
   companyCode: string; // '600519'
   companyName: string;
+  title: string; // 当前阅读版本的巨潮公告标题
+  isRevised: boolean; // 是否为完整“更正后/修订后”报告
   type: DisclosureType;
   reportPeriod: string; // '2023' | '2023Q1' | '2023H1'
   disclosureDate: string; // ISO date (YYYY-MM-DD)
