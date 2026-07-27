@@ -170,6 +170,8 @@ def update_parse_job(
     lease_expires_at: Any = None,
     payload: dict | None = None,
     attempts_incr: int = 0,
+    progress: int | None = None,
+    progress_message: str | None = None,
 ) -> None:
     conn = get_conn()
     try:
@@ -191,6 +193,13 @@ def update_parse_job(
             if attempts_incr:
                 sets.append("attempts = attempts + %s")
                 params.append(attempts_incr)
+            if progress is not None:
+                sets.append("progress=%s")
+                params.append(max(0, min(100, int(progress))))
+            if progress_message is not None:
+                sets.append("progress_message=%s")
+                params.append(progress_message[:200])
+            sets.append("updated_at=now()")
             params.append(job_id)
             cur.execute(
                 f"UPDATE parse_jobs SET {', '.join(sets)} WHERE id=%s", params

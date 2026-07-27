@@ -32,6 +32,19 @@ TRANSITION_STATUS = {
     "metrics": "extracting",
 }
 
+PROGRESS_START = {
+    "download": (3, "正在下载 PDF"),
+    "parse": (25, "正在读取 PDF 页面"),
+    "embed": (78, "正在建立问答索引"),
+    "metrics": (92, "正在抽取关键指标"),
+}
+PROGRESS_DONE = {
+    "download": (20, "PDF 下载完成"),
+    "parse": (75, "全文解析完成"),
+    "embed": (90, "问答索引建立完成"),
+    "metrics": (100, "报告解析完成"),
+}
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -115,8 +128,14 @@ def run_stage(
     # 认领租约 + 写入进行态
     lease_token = uuid.uuid4().hex
     lease_expires = _now() + timedelta(seconds=config.JOB_TIMEOUTS.get(stage, 300))
+    start_progress, start_message = PROGRESS_START.get(stage, (0, "正在处理"))
     db.update_parse_job(
-        job_id, "running", lease_token=lease_token, lease_expires_at=lease_expires
+        job_id,
+        "running",
+        lease_token=lease_token,
+        lease_expires_at=lease_expires,
+        progress=start_progress,
+        progress_message=start_message,
     )
     db.set_report_status(report_id, TRANSITION_STATUS.get(stage, "parsing"))
 
@@ -134,12 +153,25 @@ def run_stage(
         else:
             raise ValueError(f"未知阶段: {stage}")
     except Exception as e:  # noqa: BLE001
-        db.update_parse_job(job_id, "failed", error=str(e)[:2000], attempts_incr=1)
+        db.update_parse_job(
+            job_id,
+            "failed",
+            error=str(e)[:2000],
+            attempts_incr=1,
+            progress_message=f"{start_message}失败",
+        )
         db.set_report_status(report_id, "failed")
         raise
 
     # 成功：done + 报告级完成态
-    db.update_parse_job(job_id, "done", attempts_incr=1)
+    done_progress, done_message = PROGRESS_DONE.get(stage, (100, "处理完成"))
+    db.update_parse_job(
+        job_id,
+        "done",
+        attempts_incr=1,
+        progress=done_progress,
+        progress_message=done_message,
+    )
     db.set_report_status(report_id, config.STATUS_AFTER[stage])
 
     # 级联入队下一阶段（download → parse；parse → embed 属 W5–6）
@@ -159,7 +191,18 @@ def _run_download(report_id: str, source: str, payload: dict) -> dict:
 def _run_parse(report_id: str, source: str, payload: dict) -> dict:
     import parse
 
-    return parse.run_parse(report_id, source, payload)
+    job_id = f"{report_id}_parse"
+
+    def on_progress(done: int, total: int) -> None:
+        percent = 25 + round((done / max(1, total)) * 45)
+        db.update_parse_job(
+            job_id,
+            "running",
+            progress=percent,
+            progress_message=f"正在解析 PDF：第 {done}/{total} 页",
+        )
+
+    return parse.run_parse(report_id, source, payload, progress_callback=on_progress)
 
 
 def _run_embed(report_id: str, source: str, payload: dict) -> dict:

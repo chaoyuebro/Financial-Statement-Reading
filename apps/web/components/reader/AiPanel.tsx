@@ -29,24 +29,35 @@ export function AiPanel({
 }) {
   const [status, setStatus] = useState(detail.status);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(
+    ['metrics_done', 'ready'].includes(detail.status) ? 100 : 0,
+  );
+  const [progressMessage, setProgressMessage] = useState('等待开始解析');
 
   useEffect(() => {
-    if (status !== 'pending') return;
+    if (['metrics_done', 'ready'].includes(detail.status)) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const poll = async () => {
       try {
         const r = await fetch(`/api/disclosures/${detail.id}/parse`);
-        const data = (await r.json()) as { status?: typeof detail.status };
+        const data = (await r.json()) as {
+          status?: typeof detail.status;
+          progress?: number;
+          progressMessage?: string;
+          error?: string;
+        };
         if (cancelled || !r.ok || !data.status) return;
         setStatus(data.status);
+        setProgress(Math.max(0, Math.min(100, Number(data.progress ?? 0))));
+        if (data.progressMessage) setProgressMessage(data.progressMessage);
         if (data.status === 'metrics_done') {
           window.location.reload();
           return;
         }
         if (data.status === 'failed') {
-          setParseError('报告解析失败，请重试');
+          setParseError(data.error || '报告解析失败，请重试');
           return;
         }
         timer = setTimeout(poll, 1500);
@@ -55,23 +66,27 @@ export function AiPanel({
       }
     };
 
-    fetch(`/api/disclosures/${detail.id}/parse`, { method: 'POST' })
-      .then(async (r) => {
-        if (!r.ok && r.status !== 409) {
-          const data = (await r.json().catch(() => ({}))) as { error?: string };
-          throw new Error(data.error ?? '无法启动解析');
-        }
-        if (!cancelled) timer = setTimeout(poll, 800);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setParseError(e instanceof Error ? e.message : '无法启动解析');
-      });
+    if (detail.status === 'pending') {
+      fetch(`/api/disclosures/${detail.id}/parse`, { method: 'POST' })
+        .then(async (r) => {
+          if (!r.ok && r.status !== 409) {
+            const data = (await r.json().catch(() => ({}))) as { error?: string };
+            throw new Error(data.error ?? '无法启动解析');
+          }
+          if (!cancelled) timer = setTimeout(poll, 800);
+        })
+        .catch((e: unknown) => {
+          if (!cancelled) setParseError(e instanceof Error ? e.message : '无法启动解析');
+        });
+    } else {
+      timer = setTimeout(poll, 200);
+    }
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [detail.id, status]);
+  }, [detail.id, detail.status]);
 
   const processing = !['metrics_done', 'ready'].includes(status);
 
@@ -81,9 +96,31 @@ export function AiPanel({
       <div className="flex-1 space-y-4 overflow-auto p-4">
         {processing ? (
           <Section title="报告解析">
-            <p className={parseError ? 'text-xs text-rose-600' : 'text-xs text-ink-soft'}>
-              {parseError ?? '正在提取全文、指标并建立问答索引…'}
-            </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <span className={parseError ? 'text-rose-600' : 'text-ink-soft'}>
+                  {parseError ?? progressMessage}
+                </span>
+                <span className="shrink-0 font-medium tabular-nums text-ink">
+                  {progress}%
+                </span>
+              </div>
+              <div
+                className="h-2 overflow-hidden rounded-full bg-surface-muted"
+                role="progressbar"
+                aria-label="报告解析进度"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progress}
+              >
+                <div
+                  className={`h-full rounded-full transition-[width] duration-300 ${
+                    parseError ? 'bg-rose-500' : 'bg-accent'
+                  }`}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
           </Section>
         ) : (
           <>

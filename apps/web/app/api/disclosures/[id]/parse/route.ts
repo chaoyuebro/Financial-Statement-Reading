@@ -51,12 +51,32 @@ export async function GET(
   if (!g.ok && g.status === undefined) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
   }
+  const jobs = await pgPool.query<{
+    stage: string;
+    status: string;
+    progress: number;
+    progress_message: string | null;
+    last_error: string | null;
+  }>(
+    `SELECT stage, status, progress, progress_message, last_error
+     FROM parse_jobs
+     WHERE report_id=$1
+     ORDER BY progress DESC, updated_at DESC`,
+    [params.id],
+  );
+  const current = jobs.rows[0];
   return NextResponse.json({
     id: params.id,
     status: g.status,
     canParse: g.ok,
     reportPeriodUnknown: g.reportPeriodUnknown ?? false,
     isWithdrawn: g.isWithdrawn ?? false,
+    progress:
+      g.status === 'metrics_done' || g.status === 'ready'
+        ? 100
+        : Number(current?.progress ?? 0),
+    progressMessage: current?.progress_message ?? '等待开始解析',
+    error: current?.status === 'failed' ? current.last_error : undefined,
   });
 }
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Callable
 
 import fitz
 
@@ -103,7 +104,10 @@ def _valid_bookmark(item: object, n_pages: int) -> bool:
     )
 
 
-def parse_pdf(path: str) -> dict:
+def parse_pdf(
+    path: str,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> dict:
     """解析 PDF。返回 {n_pages, chunks, toc, toc_source}。
 
     chunks 元素：{page, seq(全局递增), text, meta}；meta 预留扩展位。
@@ -112,11 +116,15 @@ def parse_pdf(path: str) -> dict:
     n_pages = doc.page_count
     pages_text: list[tuple[int, str]] = []
     raw_chunks: list[dict] = []
+    progress_step = max(1, n_pages // 100)
     for pno in range(n_pages):
         txt = doc.load_page(pno).get_text("text")
         pages_text.append((pno + 1, txt))
         for seg in _split_page(txt):
             raw_chunks.append({"page": pno + 1, "text": seg, "meta": {}})
+        done = pno + 1
+        if progress_callback and (done == n_pages or done % progress_step == 0):
+            progress_callback(done, n_pages)
 
     toc_source = "PDF书签(get_toc)"
     try:
@@ -152,7 +160,12 @@ def parse_pdf(path: str) -> dict:
     }
 
 
-def run_parse(report_id: str, source: str, payload: dict | None = None) -> dict:
+def run_parse(
+    report_id: str,
+    source: str,
+    payload: dict | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> dict:
     """解析阶段入口：定位缓存 PDF → 解析 → 幂等写入 chunks + toc。"""
     payload = payload or {}
     pdf_path = payload.get("pdf_path")
@@ -162,7 +175,7 @@ def run_parse(report_id: str, source: str, payload: dict | None = None) -> dict:
     if not os.path.isfile(pdf_path):
         raise RuntimeError(f"PDF 不存在，无法解析: {pdf_path}")
 
-    result = parse_pdf(pdf_path)
+    result = parse_pdf(pdf_path, progress_callback=progress_callback)
     version_tag = db.version_tag_for(report_id, source)
     n = db.write_chunks(report_id, version_tag, result["chunks"])
     db.update_disclosure_toc(report_id, source, result["toc"])
