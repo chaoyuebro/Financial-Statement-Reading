@@ -8,9 +8,10 @@ type SyncResult = {
   date_from?: string;
   date_to?: string;
   error?: string;
+  company?: string;
 };
 
-export function SyncLatestButton() {
+export function SyncLatestButton({ query = '' }: { query?: string }) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
@@ -22,12 +23,16 @@ export function SyncLatestButton() {
     setFailed(false);
     setMessage('正在从巨潮资讯同步，请稍候…');
     try {
-      const response = await fetch('/api/sync/latest', { method: 'POST' });
+      const response = await fetch('/api/sync/latest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: query.trim() }),
+      });
       const result = (await response.json()) as SyncResult;
       if (!response.ok) throw new Error(result.error || '同步失败');
 
       setMessage(
-        `同步完成：已处理 ${result.synced ?? 0} 条披露（${result.date_from} 至 ${result.date_to}）`,
+        `同步完成：${result.company ? `${result.company}定向` : '全市场'}处理 ${result.synced ?? 0} 条披露（${result.date_from} 至 ${result.date_to}）`,
       );
       router.refresh();
     } catch (error) {

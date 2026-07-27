@@ -79,12 +79,13 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             days = max(1, min(int(data.get("days") or 45), 365))
             max_pages = max(1, min(int(data.get("max_pages") or 40), 100))
+            stock = str(data.get("stock") or "").strip()
             today = date.today()
             # 巨潮允许晚间公告归入“次一日/次一交易日”。周五晚间可能直接
             # 归入下周一，因此同步窗口向未来放宽 7 天，避免漏掉已上线但
             # 披露日期晚于服务器当天的公告。
             date_to = today + timedelta(days=7)
-            date_from = today - timedelta(days=days)
+            date_from = date(today.year - 3, 1, 1) if stock else today - timedelta(days=days)
             results = []
             total_synced = 0
 
@@ -101,6 +102,8 @@ class _Handler(BaseHTTPRequestHandler):
                     "--kind",
                     kind,
                 ]
+                if stock:
+                    command.extend(["--stock", stock])
                 completed = subprocess.run(
                     command,
                     capture_output=True,
@@ -124,6 +127,7 @@ class _Handler(BaseHTTPRequestHandler):
                     "date_from": date_from.isoformat(),
                     "date_to": date_to.isoformat(),
                     "synced": total_synced,
+                    "scope": "company" if stock else "market",
                     "results": results,
                 },
             )

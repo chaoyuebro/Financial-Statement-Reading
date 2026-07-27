@@ -81,7 +81,7 @@ export function FilterBar() {
         搜索
       </button>
 
-      <SyncLatestButton />
+      <SyncLatestButton query={q} />
     </div>
   );
 }

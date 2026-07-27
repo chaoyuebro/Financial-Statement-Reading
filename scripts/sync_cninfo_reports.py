@@ -100,6 +100,53 @@ def exchange_for(code: str, page_column: str | None) -> str:
     return "sz"
 
 
+def refresh_current_version(cur, report_id: str) -> None:
+    """按披露时间与修订优先级选择当前阅读版本。"""
+    cur.execute(
+        "UPDATE disclosures SET is_primary_source=false, is_current_version=false "
+        "WHERE report_id=%s",
+        (report_id,),
+    )
+    cur.execute(
+        """
+        SELECT source, source_announcement_id
+        FROM disclosures
+        WHERE report_id=%s
+        ORDER BY
+          disclosure_time DESC NULLS LAST,
+          (COALESCE(title, '') ~ '(更正|修订)(后|版)') DESC,
+          source_announcement_id DESC
+        LIMIT 1
+        """,
+        (report_id,),
+    )
+    selected = cur.fetchone()
+    if not selected:
+        return
+    cur.execute(
+        """
+        UPDATE disclosures
+        SET is_primary_source=true, is_current_version=true
+        WHERE source=%s AND source_announcement_id=%s
+        """,
+        selected,
+    )
+    cur.execute(
+        """
+        UPDATE reports r
+        SET title=d.title,
+            disclosure_date=d.disclosure_date,
+            disclosure_time=d.disclosure_time,
+            primary_source=d.source
+        FROM disclosures d
+        WHERE r.id=%s
+          AND d.source=%s
+          AND d.source_announcement_id=%s
+        """,
+        (report_id, *selected),
+    )
+
+
 def fetch_page(args: argparse.Namespace, page: int) -> dict:
     payload = urllib.parse.urlencode(
         {
@@ -118,8 +165,8 @@ def fetch_page(args: argparse.Namespace, page: int) -> dict:
             ),
             "trade": "",
             "seDate": f"{args.date_from}~{args.date_to}",
-            "sortName": "",
-            "sortType": "",
+            "sortName": "time",
+            "sortType": "desc",
             "isHLtitle": "true",
         }
     ).encode()
@@ -230,22 +277,15 @@ def upsert_announcement(cur, item: dict) -> bool:
             """,
             (title, disclosed, disclosure_time, pdf_url, adjunct, announcement_id),
         )
+        refresh_current_version(cur, report_id)
         return True
 
-    # 新版本到达时切换当前披露；规范报告行保持同一个 report_id。
-    cur.execute(
-        """
-        UPDATE disclosures SET is_primary_source=false, is_current_version=false
-        WHERE report_id=%s
-        """,
-        (report_id,),
-    )
     cur.execute(
         """
         INSERT INTO disclosures
           (source,source_announcement_id,report_id,company_code,type,report_period,
            title,disclosure_date,disclosure_time,pdf_url,adjunct_url,is_primary_source,is_current_version)
-        VALUES ('cninfo',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true,true)
+        VALUES ('cninfo',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,false,false)
         ON CONFLICT (source,source_announcement_id) DO UPDATE SET
           report_id=EXCLUDED.report_id,
           company_code=EXCLUDED.company_code,
@@ -256,8 +296,8 @@ def upsert_announcement(cur, item: dict) -> bool:
           disclosure_time=EXCLUDED.disclosure_time,
           pdf_url=EXCLUDED.pdf_url,
           adjunct_url=EXCLUDED.adjunct_url,
-          is_primary_source=true,
-          is_current_version=true
+          is_primary_source=false,
+          is_current_version=false
         """,
         (
             announcement_id,
@@ -272,6 +312,7 @@ def upsert_announcement(cur, item: dict) -> bool:
             adjunct,
         ),
     )
+    refresh_current_version(cur, report_id)
     return True
 
 
