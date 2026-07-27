@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Exchange, EXCHANGE_LABELS } from '@fr/shared';
+import { SyncLatestButton } from './SyncLatestButton';
 
 const EXCHANGES: Exchange[] = ['sh', 'sz', 'bse'];
 
@@ -79,6 +80,8 @@ export function FilterBar() {
       >
         搜索
       </button>
+
+      <SyncLatestButton />
     </div>
   );
 }

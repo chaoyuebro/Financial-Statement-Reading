@@ -4,7 +4,6 @@ import { DisclosureType, Exchange } from '@fr/shared';
 import { TypeTabs } from '@/components/TypeTabs';
 import { FilterBar } from '@/components/FilterBar';
 import { DisclosureList } from '@/components/DisclosureList';
-import { SyncLatestButton } from '@/components/SyncLatestButton';
 
 // 直连 Postgres，按 searchParams 动态渲染（SSR）
 export const dynamic = 'force-dynamic';
@@ -35,7 +34,6 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       </header>
 
       <section className="mx-auto max-w-5xl space-y-4 px-4 py-6">
-        <SyncLatestButton />
         <Suspense fallback={<div className="h-9" />}>
           <TypeTabs />
         </Suspense>
