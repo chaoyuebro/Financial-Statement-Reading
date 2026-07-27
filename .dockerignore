@@ -15,3 +15,4 @@ apps/worker/__pycache__
 *.pyc
 .DS_Store
 .workbuddy
+.deploy_commit

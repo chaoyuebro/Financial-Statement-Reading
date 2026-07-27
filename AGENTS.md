@@ -11,5 +11,7 @@
   - Web 源码变化：只重新构建并重启 Web。
   - Dockerfile、依赖清单或基础环境变化：才完整重建对应镜像。
   - 数据库迁移变化：先备份，再执行迁移；不得清空现有 PostgreSQL 或 MinIO 数据。
+- 优先使用 `scripts/deploy_ubuntu.ps1` 的 Git 提交差异增量部署；依赖清单未变化时，
+  Web 构建必须使用 `Dockerfile.web.incremental` 跳过 `npm ci`。
 - 部署完成后检查容器状态，并访问 `http://192.168.31.199:3001` 或对应 API
   验证功能；如果同步或部署失败，要明确说明失败阶段，不得声称已完成。

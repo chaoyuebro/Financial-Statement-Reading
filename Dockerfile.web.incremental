@@ -1,0 +1,13 @@
+# 普通 Web 源码更新专用：复用当前生产镜像中的 node_modules，
+# 不执行 npm ci。依赖清单变化时必须改用 Dockerfile.web 完整构建。
+ARG BASE_IMAGE=infra-web:latest
+FROM ${BASE_IMAGE}
+
+WORKDIR /app
+COPY . .
+RUN rm -rf apps/web/.next \
+ && npm run build --workspace=@fr/web
+
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["npm", "run", "start", "--workspace=@fr/web"]
