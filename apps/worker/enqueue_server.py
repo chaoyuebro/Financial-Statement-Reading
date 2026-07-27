@@ -19,12 +19,19 @@ POST /internal/retrieve
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+import threading
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import date, timedelta
 
 import config
 import db  # noqa: F401 — 随包初始化（连接池懒加载）
 import pipeline
+
+
+_sync_lock = threading.Lock()
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -46,7 +53,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.rstrip("/")
-        if path not in ("/internal/enqueue", "/internal/retrieve"):
+        if path not in ("/internal/enqueue", "/internal/retrieve", "/internal/sync"):
             self._send(404, {"error": "not found"})
             return
         if not self._auth_ok():
@@ -60,8 +67,68 @@ class _Handler(BaseHTTPRequestHandler):
 
         if path == "/internal/enqueue":
             self._handle_enqueue(data)
-        else:
+        elif path == "/internal/retrieve":
             self._handle_retrieve(data)
+        else:
+            self._handle_sync(data)
+
+    def _handle_sync(self, data: dict) -> None:
+        if not _sync_lock.acquire(blocking=False):
+            self._send(409, {"error": "已有同步任务正在进行，请稍后再试"})
+            return
+        try:
+            days = max(1, min(int(data.get("days") or 45), 365))
+            max_pages = max(1, min(int(data.get("max_pages") or 40), 100))
+            date_to = date.today()
+            date_from = date_to - timedelta(days=days)
+            results = []
+            total_synced = 0
+
+            for kind in ("periodic", "prospectus"):
+                command = [
+                    sys.executable,
+                    "/app/scripts/sync_cninfo_reports.py",
+                    "--date-from",
+                    date_from.isoformat(),
+                    "--date-to",
+                    date_to.isoformat(),
+                    "--max-pages",
+                    str(max_pages),
+                    "--kind",
+                    kind,
+                ]
+                completed = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                    check=False,
+                )
+                if completed.returncode != 0:
+                    message = (completed.stderr or completed.stdout or "同步失败").strip()
+                    raise RuntimeError(f"{kind}: {message[-500:]}")
+
+                lines = [line for line in completed.stdout.splitlines() if line.strip()]
+                summary = json.loads(lines[-1]) if lines else {}
+                total_synced += int(summary.get("synced") or 0)
+                results.append({"kind": kind, **summary})
+
+            self._send(
+                200,
+                {
+                    "done": True,
+                    "date_from": date_from.isoformat(),
+                    "date_to": date_to.isoformat(),
+                    "synced": total_synced,
+                    "results": results,
+                },
+            )
+        except subprocess.TimeoutExpired:
+            self._send(504, {"error": "同步超时，请稍后重试"})
+        except Exception as e:  # noqa: BLE001
+            self._send(502, {"error": str(e)})
+        finally:
+            _sync_lock.release()
 
     def _handle_enqueue(self, data: dict) -> None:
         report_id = data.get("report_id")
