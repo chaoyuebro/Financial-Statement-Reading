@@ -13,6 +13,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -132,8 +133,20 @@ def fetch_page(args: argparse.Namespace, page: int) -> dict:
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         },
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    last_error: Exception | None = None
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code not in (408, 429, 500, 502, 503, 504):
+                raise
+        except (urllib.error.URLError, TimeoutError) as exc:
+            last_error = exc
+        time.sleep(min(8.0, 0.8 * (2**attempt)))
+    assert last_error is not None
+    raise last_error
 
 
 def upsert_announcement(cur, item: dict) -> bool:
