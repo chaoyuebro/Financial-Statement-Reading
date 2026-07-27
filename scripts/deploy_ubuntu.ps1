@@ -14,10 +14,12 @@ try {
     & tar -czf $archivePath `
         --exclude=node_modules `
         --exclude=.next `
+        --exclude='.next*' `
         --exclude=.git `
         --exclude=.pytest_cache `
         --exclude=__pycache__ `
         --exclude=tmp `
+        --exclude=apps/worker/.pdf_cache `
         --exclude=.env `
         --exclude='*.tsbuildinfo' `
         --exclude=apps/web/public/nutrient-viewer-lib `
