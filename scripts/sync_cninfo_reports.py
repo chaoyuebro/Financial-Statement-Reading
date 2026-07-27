@@ -114,7 +114,12 @@ def refresh_current_version(cur, report_id: str) -> None:
         WHERE report_id=%s
         ORDER BY
           disclosure_time DESC NULLS LAST,
-          (COALESCE(title, '') ~ '(更正|修订)(后|版)') DESC,
+          (
+            COALESCE(title, '') LIKE '%更正后%'
+            OR COALESCE(title, '') LIKE '%更正版%'
+            OR COALESCE(title, '') LIKE '%修订后%'
+            OR COALESCE(title, '') LIKE '%修订版%'
+          ) DESC,
           source_announcement_id DESC
         LIMIT 1
         """,
