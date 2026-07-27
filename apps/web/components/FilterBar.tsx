@@ -76,7 +76,7 @@ export function FilterBar() {
 
       <button
         onClick={() => apply({ q: q.trim() || '' })}
-        className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-white hover:opacity-90"
+        className="inline-flex h-9 items-center rounded-md bg-accent px-4 text-sm font-medium text-white transition hover:bg-blue-700"
       >
         搜索
       </button>
