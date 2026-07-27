@@ -105,8 +105,20 @@ if [[ "$compose_changed" == "1" ]]; then
   docker compose -f infra/docker-compose.yml --env-file .env up -d --no-build
 fi
 
-printf '%s\n' "$COMMIT" > .deploy_commit
 docker compose -f infra/docker-compose.yml --env-file .env ps
-curl --fail --silent --show-error --max-time 20 \
-  --output /dev/null http://127.0.0.1:3001/
+
+healthy=0
+for _ in {1..20}; do
+  if curl --fail --silent --max-time 5 --output /dev/null http://127.0.0.1:3001/; then
+    healthy=1
+    break
+  fi
+  sleep 2
+done
+if [[ "$healthy" != "1" ]]; then
+  echo "Web 服务在 40 秒内未就绪。" >&2
+  exit 1
+fi
+
+printf '%s\n' "$COMMIT" > .deploy_commit
 echo "增量部署验证通过，提交：$COMMIT"
