@@ -208,7 +208,18 @@ def _run_parse(report_id: str, source: str, payload: dict) -> dict:
 def _run_embed(report_id: str, source: str, payload: dict) -> dict:
     import embed
 
-    return embed.run_embed(report_id, source, payload)
+    job_id = f"{report_id}_embed"
+
+    def on_progress(done: int, total: int) -> None:
+        percent = 78 + round((done / max(1, total)) * 11)
+        db.update_parse_job(
+            job_id,
+            "running",
+            progress=percent,
+            progress_message=f"正在建立问答索引：{done}/{total} 个片段",
+        )
+
+    return embed.run_embed(report_id, source, payload, progress_callback=on_progress)
 
 
 def _run_metrics(report_id: str, source: str, payload: dict) -> dict:

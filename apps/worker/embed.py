@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import config
 import db
 
@@ -46,7 +48,12 @@ def set_embedder(fn) -> None:
     _EMBEDDER_OVERRIDE = fn
 
 
-def run_embed(report_id: str, source: str, payload: dict | None = None) -> dict:
+def run_embed(
+    report_id: str,
+    source: str,
+    payload: dict | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> dict:
     """阶段入口：读 chunks → embed → 幂等写 embedding。"""
     payload = payload or {}
     version_tag = payload.get("version_tag") or db.version_tag_for(report_id, source)
@@ -62,13 +69,18 @@ def run_embed(report_id: str, source: str, payload: dict | None = None) -> dict:
         keys.append(k)
         by_key[k] = text
 
-    texts = [by_key[k] for k in keys]
     embedder = get_embedder()
-    vecs = embedder(texts)
-
-    vectors = [
-        {"page": k[0], "seq": k[1], "embedding": vecs[i]}
-        for i, k in enumerate(keys)
-    ]
-    n = db.write_embeddings(report_id, version_tag, vectors)
-    return {"embedded": n}
+    batch_size = 32
+    embedded = 0
+    total = len(keys)
+    for start in range(0, total, batch_size):
+        batch_keys = keys[start : start + batch_size]
+        vecs = embedder([by_key[k] for k in batch_keys])
+        vectors = [
+            {"page": k[0], "seq": k[1], "embedding": vecs[i]}
+            for i, k in enumerate(batch_keys)
+        ]
+        embedded += db.write_embeddings(report_id, version_tag, vectors)
+        if progress_callback is not None:
+            progress_callback(min(start + len(batch_keys), total), total)
+    return {"embedded": embedded}

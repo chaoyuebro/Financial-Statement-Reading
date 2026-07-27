@@ -39,7 +39,13 @@ def _fake_embedder(texts):
 def test_run_embed_orders_and_writes():
     embed.set_embedder(_fake_embedder)
     _CAP.clear()
-    res = embed.run_embed("rid", "cninfo", {"version_tag": "v1"})
+    progress = []
+    res = embed.run_embed(
+        "rid",
+        "cninfo",
+        {"version_tag": "v1"},
+        progress_callback=lambda done, total: progress.append((done, total)),
+    )
     assert res["embedded"] == 3, res
     rows = _CAP["rows"]
     assert len(rows) == 3
@@ -51,6 +57,7 @@ def test_run_embed_orders_and_writes():
     assert rows[0]["embedding"][0] == 0.0
     assert rows[1]["embedding"][0] == 1.0
     assert rows[2]["embedding"][0] == 2.0
+    assert progress == [(3, 3)]
 
 
 def test_run_embed_empty():
@@ -64,6 +71,31 @@ def test_run_embed_empty():
         assert "rows" not in _CAP  # 无 chunk 不写 embedding
     finally:
         embed.db.read_chunks = original  # 还原，避免污染后续测试
+
+
+def test_run_embed_reports_each_batch():
+    embed.set_embedder(_fake_embedder)
+    original_read = embed.db.read_chunks
+    original_write = embed.db.write_embeddings
+    writes = []
+    progress = []
+    embed.db.read_chunks = lambda rid, vt: [
+        (page, 1, f"text {page}") for page in range(1, 66)
+    ]
+    embed.db.write_embeddings = lambda rid, vt, rows: writes.append(rows) or len(rows)
+    try:
+        res = embed.run_embed(
+            "rid",
+            "cninfo",
+            {"version_tag": "v1"},
+            progress_callback=lambda done, total: progress.append((done, total)),
+        )
+        assert res["embedded"] == 65
+        assert [len(rows) for rows in writes] == [32, 32, 1]
+        assert progress == [(32, 65), (64, 65), (65, 65)]
+    finally:
+        embed.db.read_chunks = original_read
+        embed.db.write_embeddings = original_write
 
 
 if __name__ == "__main__":

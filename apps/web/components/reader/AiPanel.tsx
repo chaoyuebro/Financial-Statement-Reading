@@ -32,7 +32,19 @@ export function AiPanel({
   const [progress, setProgress] = useState(
     ['metrics_done', 'ready'].includes(detail.status) ? 100 : 0,
   );
+  const [targetProgress, setTargetProgress] = useState(progress);
   const [progressMessage, setProgressMessage] = useState('等待开始解析');
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProgress((current) => {
+        if (current >= targetProgress) return current;
+        const step = Math.max(1, Math.ceil((targetProgress - current) / 10));
+        return Math.min(targetProgress, current + step);
+      });
+    }, 80);
+    return () => clearInterval(timer);
+  }, [targetProgress]);
 
   useEffect(() => {
     if (['metrics_done', 'ready'].includes(detail.status)) return;
@@ -50,7 +62,8 @@ export function AiPanel({
         };
         if (cancelled || !r.ok || !data.status) return;
         setStatus(data.status);
-        setProgress(Math.max(0, Math.min(100, Number(data.progress ?? 0))));
+        const nextProgress = Math.max(0, Math.min(100, Number(data.progress ?? 0)));
+        setTargetProgress((current) => Math.max(current, nextProgress));
         if (data.progressMessage) setProgressMessage(data.progressMessage);
         if (data.status === 'metrics_done') {
           window.location.reload();
