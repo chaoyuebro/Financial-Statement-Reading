@@ -1,0 +1,9 @@
+# 解析 / 抽取管线依赖（W3+ 管线开发时安装，不纳入 W1-2 基础镜像）
+# 注意：sentence-transformers 会拉取 torch(数 GB) + numpy/scipy/pandas/transformers，
+# 离线或在容器内安装极慢，建议本地 venv / 缓存镜像后增量安装。
+pymupdf>=1.24
+pdfplumber>=0.11
+fastembed>=0.7,<1
+psycopg2-binary>=2.9
+minio>=7.2
+# 运行时最小依赖（与 requirements.txt 合并）已含 rq / redis / python-dotenv

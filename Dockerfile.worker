@@ -1,0 +1,24 @@
+# Dockerfile.worker — Python RQ Worker（W1-2 / §12, §5.1 队列协议）
+# 构建上下文为仓库根目录（docker-compose 中 context: ..）
+FROM python:3.11-slim AS base
+WORKDIR /app
+
+# 系统依赖: pgvector 客户端(pg8000/psycopg 不需要编译, 但 boto3/minio 需要)、gcc 仅作编译兜底
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY apps/worker/requirements.txt ./apps/worker/requirements.txt
+RUN pip install --no-cache-dir -r apps/worker/requirements.txt
+
+# 解析阶段依赖（W3-4 download/parse 必需）：psycopg2 + PyMuPDF + minio。
+# 注意：sentence-transformers/torch(向量化, W5-6) 体积大，单独镜像/按需安装，此处不纳入以免镜像暴涨。
+COPY apps/worker/requirements-parse.txt ./apps/worker/requirements-parse.txt
+RUN pip install --no-cache-dir pymupdf psycopg2-binary minio "fastembed>=0.7,<1"
+
+# 复制 worker 源码（含预研归档 preresearch/ 与抽取逻辑 extractors/）
+COPY apps/worker/ ./apps/worker/
+
+WORKDIR /app/apps/worker
+# 默认命令由 compose 覆盖为 rq worker；此处兜底
+CMD ["python", "pipeline.py"]

@@ -1,0 +1,21 @@
+# Dockerfile.web — Next.js 应用（W1-2 / §12）
+# 构建上下文为仓库根目录（docker-compose 中 context: ..）
+FROM node:20-alpine AS base
+WORKDIR /app
+
+# 仅复制清单以利用层缓存
+COPY package.json package-lock.json* ./
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/web/package.json ./apps/web/
+
+RUN npm ci
+
+# 复制全部源码（node_modules / .next 由 .dockerignore 排除）
+COPY . .
+
+# 构建 web 应用（@fr/shared 经 transpilePackages 同仓编译）
+RUN npm run build --workspace=@fr/web
+
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["npm", "run", "start", "--workspace=@fr/web"]

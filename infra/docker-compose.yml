@@ -1,0 +1,139 @@
+# ============================================================================
+# docker-compose.yml — 五服务编排（W1-2 / §12 部署）
+# 服务: postgres(pgvector) / redis(RQ 队列) / minio(PDF 与产物) / web(Next.js) / worker(Python RQ)
+# 注意: 迁移 SQL 挂载进 postgres 的 /docker-entrypoint-initdb.d，首次启动自动建库+种子。
+#       MinIO 桶由 worker 启动时按 MINIO_BUCKET 用 boto3 create_bucket 自动创建(幂等)。
+# 启动: docker compose -f infra/docker-compose.yml --env-file .env up --build
+# ============================================================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: fr_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fr_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-fr}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # 首次启动按文件名顺序自动执行（0001_* 先于 0002_*）
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fr} -d ${POSTGRES_DB:-fr}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: fr_redis
+    restart: unless-stopped
+    ports:
+      # 宿主机侧用 6380 规避本机已占用的 6379；容器内仍为 6379，服务间(web/worker)连接不受影响
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: fr_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-fr_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fr_minio_pw}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-fr_minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-fr_minio_pw}
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile.web
+    container_name: fr_web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fr}:${POSTGRES_PASSWORD:-fr_dev_pw}@postgres:5432/${POSTGRES_DB:-fr}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_SECURE: "false"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-fr_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fr_minio_pw}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-fr_minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-fr_minio_pw}
+      MINIO_BUCKET: ${MINIO_BUCKET:-fr-pdf}
+      WORKER_API_TOKEN: ${WORKER_API_TOKEN:-dev_worker_token}
+      WORKER_ENQUEUE_URL: http://worker:8000/internal/enqueue
+      LLM_API_STYLE: ${LLM_API_STYLE:-}
+      LLM_API_BASE: ${LLM_API_BASE:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      NODE_ENV: production
+      # 开发/冒烟：允许 PDF 代理回退到本地 fixture（生产须置 0）
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile.worker
+    container_name: fr_worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fr}:${POSTGRES_PASSWORD:-fr_dev_pw}@postgres:5432/${POSTGRES_DB:-fr}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_SECURE: "false"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-fr_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fr_minio_pw}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-fr_minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-fr_minio_pw}
+      MINIO_BUCKET: ${MINIO_BUCKET:-fr-pdf}
+      WORKER_API_TOKEN: ${WORKER_API_TOKEN:-dev_worker_token}
+      RQ_QUEUE: ${RQ_QUEUE:-default}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      EMBEDDING_DIM: "512"
+      EMBEDDING_CACHE_DIR: /models/fastembed
+      # 扁平模块导入 + RQ 任务 pipeline.run_stage 解析所需
+      PYTHONPATH: /app/apps/worker
+      # 内部入队端点：容器内网监听(web BFF 经 worker:8000 访问)，不暴露到宿主机
+      ENQUEUE_HOST: 0.0.0.0
+      ENQUEUE_PORT: 8000
+    # 同时启动「内部入队 HTTP 端点」与「RQ Worker」(run_worker.sh: 先 enqueue_server 后台, 再 rq worker 前台)
+    command: bash /app/apps/worker/run_worker.sh
+    expose:
+      - "8000"
+    volumes:
+      - embedding_models:/models/fastembed
+
+volumes:
+  pgdata:
+  miniodata:
+  embedding_models:

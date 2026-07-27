@@ -1,0 +1,17 @@
+# .dockerignore — 避免把本地产物/依赖打进镜像
+node_modules
+**/node_modules
+**/.next
+**/.next.bak
+apps/web/public/nutrient-viewer-lib
+apps/web/public/nutrient-viewer.js
+.git
+**/.env
+**/.env.local
+*.log
+tests
+apps/worker/__pycache__
+**/__pycache__
+*.pyc
+.DS_Store
+.workbuddy

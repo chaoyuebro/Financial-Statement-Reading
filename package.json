@@ -1,0 +1,21 @@
+{
+  "name": "financial-report-reader",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @fr/web",
+    "build": "npm run build --workspace @fr/web",
+    "start": "npm run start --workspace @fr/web",
+    "typecheck": "npm run typecheck --workspace @fr/web",
+    "test:web": "npm run test --workspace @fr/web",
+    "test:worker": "python scripts/run_worker_tests.py",
+    "test": "npm run typecheck && npm run test:web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

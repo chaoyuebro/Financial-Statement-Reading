@@ -1,0 +1,5 @@
+# Worker 容器运行时最小依赖（W1-2 验证用）
+# 仅需能启动 `rq worker` 并连接 Redis；解析/嵌入重型依赖见 requirements-parse.txt
+rq>=1.16
+redis>=5.0
+python-dotenv>=1.0
