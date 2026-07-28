@@ -71,7 +71,7 @@ EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "512"))
 EMBEDDING_CACHE_DIR = os.getenv("EMBEDDING_CACHE_DIR", "/models/fastembed")
 # P1 可切换不同维度模型——必须为该模型新建独立向量列与索引（§6.4），不得混用同一列
 
-# ---- 关键指标大模型复核（规则抽取后、写库前）----
+# ---- 关键指标大模型复核（规则抽取后、写库前；失败自动回退规则结果）----
 LLM_API_STYLE = os.getenv("LLM_API_STYLE", "")
 LLM_API_BASE = os.getenv("LLM_API_BASE", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "")

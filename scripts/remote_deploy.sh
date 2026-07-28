@@ -85,6 +85,12 @@ if [[ "$web_changed" == "1" ]]; then
   docker compose -f infra/docker-compose.yml --env-file .env up -d --no-deps --force-recreate web
 fi
 
+# Compose 环境变化必须先重建容器，再增量复制 Worker 代码；
+# 否则后执行的 recreate 会用旧镜像覆盖刚复制的新代码。
+if [[ "$compose_changed" == "1" ]]; then
+  docker compose -f infra/docker-compose.yml --env-file .env up -d --no-build
+fi
+
 if [[ "$worker_changed" == "1" ]]; then
   if [[ "$worker_deps_changed" == "1" ]] || ! docker container inspect fr_worker >/dev/null 2>&1; then
     echo "[Worker] 依赖或镜像配置有变化，执行完整构建。"
@@ -103,10 +109,6 @@ if [[ "$worker_changed" == "1" ]]; then
     fi
     docker restart fr_worker >/dev/null
   fi
-fi
-
-if [[ "$compose_changed" == "1" ]]; then
-  docker compose -f infra/docker-compose.yml --env-file .env up -d --no-build
 fi
 
 docker compose -f infra/docker-compose.yml --env-file .env ps
