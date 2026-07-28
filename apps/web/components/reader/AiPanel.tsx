@@ -36,7 +36,7 @@ export function AiPanel({
   const [progressMessage, setProgressMessage] = useState('等待开始解析');
   const [parseSession, setParseSession] = useState(0);
   const [restarting, setRestarting] = useState(false);
-  const [activeView, setActiveView] = useState<'main' | 'summary'>('main');
+  const [activeView, setActiveView] = useState<'main' | 'metrics' | 'analysis'>('main');
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -177,17 +177,24 @@ export function AiPanel({
           <>
             {activeView === 'main' ? (
               <>
-                <MetricsSection reportId={detail.id} onCite={onCite} />
-                <button
-                  type="button"
-                  onClick={() => setActiveView('summary')}
-                  className="flex w-full items-center justify-between rounded-lg border border-line bg-surface px-3 py-2.5 text-sm hover:border-accent hover:bg-accent-soft/40"
-                >
-                  <span>查看一键摘要</span>
-                  <span className="text-accent" aria-hidden>
-                    →
-                  </span>
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('metrics')}
+                    className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2.5 text-sm hover:border-accent hover:bg-accent-soft/40"
+                  >
+                    <span>关键指标</span>
+                    <span className="text-accent" aria-hidden>→</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('analysis')}
+                    className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2.5 text-sm hover:border-accent hover:bg-accent-soft/40"
+                  >
+                    <span>AI 深度分析</span>
+                    <span className="text-accent" aria-hidden>→</span>
+                  </button>
+                </div>
                 <ChatSection reportId={detail.id} onCite={onCite} />
               </>
             ) : (
@@ -197,9 +204,13 @@ export function AiPanel({
                   onClick={() => setActiveView('main')}
                   className="self-start text-xs text-accent hover:underline"
                 >
-                  ← 返回关键指标与问答
+                  ← 返回报告问答
                 </button>
-                <SummarySection reportId={detail.id} onCite={onCite} />
+                {activeView === 'metrics' ? (
+                  <MetricsSection reportId={detail.id} onCite={onCite} />
+                ) : (
+                  <SummarySection reportId={detail.id} onCite={onCite} />
+                )}
               </>
             )}
           </>
@@ -358,7 +369,7 @@ function SummarySection({ reportId, onCite }: { reportId: string; onCite: Citati
   }, [load]);
 
   return (
-    <Section title="一键摘要">
+    <Section title="AI 深度分析">
       {loading && <p className="text-xs text-ink-soft">生成中…</p>}
       {err && (
         <div className="flex items-center justify-between gap-2">
@@ -372,7 +383,10 @@ function SummarySection({ reportId, onCite }: { reportId: string; onCite: Citati
         <ul className="space-y-2 text-sm">
           {data.points.map((p, i) => (
             <li key={i} className="rounded border border-line p-2">
-              <p className="leading-relaxed">{p.text}</p>
+              <h4 className="font-medium">{p.text.split('\n')[0]}</h4>
+              <p className="mt-1 leading-relaxed">
+                {p.text.split('\n').slice(1).join('\n')}
+              </p>
               {p.citations.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {p.citations.map((c, j) => (

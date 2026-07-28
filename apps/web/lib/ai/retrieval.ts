@@ -25,7 +25,8 @@ export async function callWorkerRetrieve(
   token: string,
   params: RetrieveParams,
 ): Promise<RetrieveResult> {
-  const res = await fetch(`${endpoint.replace(/\/+$/, '')}/internal/retrieve`, {
+  const base = endpoint.replace(/\/internal\/enqueue\/?$/, '').replace(/\/+$/, '');
+  const res = await fetch(`${base}/internal/retrieve`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
