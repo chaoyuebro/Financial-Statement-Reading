@@ -114,6 +114,28 @@ def test_yoy_not_calculated_when_source_says_not_applicable():
     assert row["yoy"] is None
 
 
+def test_structured_table_preferred_and_unit_converted():
+    narrative = (
+        "2025 年营业总收入4,585 亿元，归母净利润439.5 亿元。"
+        "ToB业务收入1,228亿元，同比增长17.5%。"
+    )
+    table = (
+        "营业收入（千元）\n456,451,731\n407,149,600\n12.11%\n"
+        "归属于上市公司股东的净利润（千元）\n"
+        "43,945,411\n38,537,237\n14.03%\n"
+        "经营活动产生的现金流量净额（千元）\n"
+        "53,345,930\n60,511,572\n-11.84%\n"
+    )
+    rows = _by_name(metrics.extract_metrics([(2, narrative), (9, table)]))
+    assert rows["revenue"]["value"] == 456_451_731_000
+    assert rows["revenue"]["page"] == 9
+    assert rows["revenue"]["yoy"] == 12.11
+    assert rows["net_profit_attr"]["value"] == 43_945_411_000
+    assert rows["net_profit_attr"]["page"] == 9
+    assert rows["op_cash_flow"]["value"] == 53_345_930_000
+    assert rows["op_cash_flow"]["yoy"] == -11.84
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0

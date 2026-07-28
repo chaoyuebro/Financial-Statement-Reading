@@ -52,11 +52,16 @@ METRICS: dict[str, dict] = {
     },
 }
 
-# 货币数字：千分位分组，或 6+ 位纯数字（带可选小数点）；允许括号/负号表示负数
+# 货币数字：显式带货币单位的任意位数，或千分位分组，或 6+ 位纯数字。
+# “439.5 亿元”这类金额不能因位数少而漏掉。
 MONEY_RE = re.compile(
-    r"\(?-?[\d,]{1,3}(?:,\d{3})+(?:\.\d+)?\)?|-?[\d,]{6,}(?:\.\d+)?"
+    r"\(?-?\d+(?:,\d{3})*(?:\.\d+)?\)?(?=\s*(?:亿元|万元|千元|元))"
+    r"|\(?-?[\d,]{1,3}(?:,\d{3})+(?:\.\d+)?\)?"
+    r"|-?[\d,]{6,}(?:\.\d+)?"
 )
 YEAR_RE = re.compile(r"^(?:19|20)\d{2}$")
+UNIT_RE = re.compile(r"(亿元|万元|千元|元)")
+UNIT_MULTIPLIERS = {"亿元": 100_000_000.0, "万元": 10_000.0, "千元": 1_000.0, "元": 1.0}
 KW_CACHE: dict[str, "re.Pattern[str]"] = {}
 
 
@@ -86,7 +91,7 @@ def _first_money(s: str):
         digits = re.sub(r"[^\d]", "", tok)
         if YEAR_RE.match(digits):
             continue
-        v = parse_number(tok)
+        v = _scaled_number(s, m, tok)
         if v is not None:
             return v, tok
     return None, None
@@ -110,7 +115,7 @@ def _second_money(s: str) -> float | None:
         digits = re.sub(r"[^\d]", "", tok)
         if YEAR_RE.match(digits):
             continue
-        value = parse_number(tok)
+        value = _scaled_number(s, m, tok)
         if value is not None:
             values.append(value)
         if len(values) == 2:
@@ -126,12 +131,31 @@ def _nth_money(s: str, index: int) -> tuple[float | None, str | None]:
         digits = re.sub(r"[^\d]", "", tok)
         if YEAR_RE.match(digits):
             continue
-        value = parse_number(tok)
+        value = _scaled_number(s, m, tok)
         if value is not None:
             values.append((value, tok))
         if len(values) > index:
             return values[index]
     return None, None
+
+
+def _scaled_number(s: str, match: "re.Match[str]", tok: str) -> float | None:
+    """将亿元/万元/千元统一换算为元。
+
+    单位既可能紧跟数值（“439.5 亿元”），也可能位于表头
+    （“营业收入（千元）”）。表头单位以首个金额前的文字为准。
+    """
+    value = parse_number(tok)
+    if value is None:
+        return None
+    after = s[match.end() : match.end() + 8]
+    unit_match = UNIT_RE.search(after)
+    if unit_match is None:
+        first_money = MONEY_RE.search(s)
+        header = s[: first_money.start()] if first_money else ""
+        unit_match = UNIT_RE.search(header[-40:])
+    multiplier = UNIT_MULTIPLIERS.get(unit_match.group(1), 1.0) if unit_match else 1.0
+    return value * multiplier
 
 
 def _extract_one(
@@ -141,6 +165,7 @@ def _extract_one(
     value_index: int = 0,
 ):
     """按 4 坑规则抽取单指标；「命中即停」（规则 4）。返回 (value, raw, page, prev)。"""
+    fallback = None
     for pno, txt in pages_text:
         for k in keys:
             rgx = kw_regex(k)
@@ -151,9 +176,9 @@ def _extract_one(
                     break
                 after = txt[m_k.end() : m_k.end() + window]
                 effective_index = value_index
+                first_match = MONEY_RE.search(after)
+                before_first = after[: first_match.start()] if first_match else after
                 if value_index > 0:
-                    first_match = MONEY_RE.search(after)
-                    before_first = after[: first_match.start()] if first_match else after
                     if "不适用" in before_first:
                         effective_index = 0
                 val, raw = _nth_money(after, effective_index)
@@ -172,9 +197,15 @@ def _extract_one(
                         after_prev = after[money[1].end() : money[1].end() + 40]
                         if "不适用" in after_prev:
                             prev = None
-                    return val, raw, pno, prev
+                    candidate = (val, raw, pno, prev)
+                    # “指标名（千元）+ 多列数字”是结构化主要会计数据表，
+                    # 优先级高于致股东信、经营讨论等叙述性首处命中。
+                    if UNIT_RE.search(before_first):
+                        return candidate
+                    if fallback is None:
+                        fallback = candidate
                 start = m_k.end()
-    return None, None, None, None
+    return fallback or (None, None, None, None)
 
 
 def extract_metrics(
