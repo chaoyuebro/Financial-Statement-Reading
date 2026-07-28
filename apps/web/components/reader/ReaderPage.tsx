@@ -21,6 +21,46 @@ export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
   const [search, setSearch] = useState('');
   const [searchMsg, setSearchMsg] = useState<string | null>(null);
   const [readerMode, setReaderMode] = useState<'native' | 'smart'>('native');
+  const [aiPanelWidth, setAiPanelWidth] = useState(420);
+
+  useEffect(() => {
+    const saved = Number(window.localStorage.getItem('financial-reader-ai-width'));
+    if (Number.isFinite(saved) && saved >= 340 && saved <= 720) {
+      setAiPanelWidth(saved);
+    }
+  }, []);
+
+  const resizeAiPanel = (nextWidth: number) => {
+    const maxWidth = Math.min(720, Math.floor(window.innerWidth * 0.6));
+    setAiPanelWidth(Math.max(340, Math.min(maxWidth, Math.round(nextWidth))));
+  };
+
+  const startAiPanelResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = aiPanelWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (moveEvent: PointerEvent) => {
+      resizeAiPanel(startWidth + startX - moveEvent.clientX);
+    };
+    const onUp = (upEvent: PointerEvent) => {
+      const maxWidth = Math.min(720, Math.floor(window.innerWidth * 0.6));
+      const width = Math.max(
+        340,
+        Math.min(maxWidth, Math.round(startWidth + startX - upEvent.clientX)),
+      );
+      setAiPanelWidth(width);
+      window.localStorage.setItem('financial-reader-ai-width', String(width));
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+  };
 
   const jump = (page: number) => {
     setCurrentPage(page);
@@ -155,7 +195,38 @@ export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
         </main>
 
         {readerMode === 'smart' && (
-          <aside className="hidden w-[340px] shrink-0 border-l border-line bg-surface lg:block">
+          <aside
+            className="relative hidden shrink-0 border-l border-line bg-surface lg:block"
+            style={{ width: aiPanelWidth }}
+          >
+            <div
+              role="separator"
+              aria-label="调整 AI 面板宽度"
+              aria-orientation="vertical"
+              aria-valuemin={340}
+              aria-valuemax={720}
+              aria-valuenow={aiPanelWidth}
+              tabIndex={0}
+              onPointerDown={startAiPanelResize}
+              onDoubleClick={() => {
+                setAiPanelWidth(420);
+                window.localStorage.setItem('financial-reader-ai-width', '420');
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                event.preventDefault();
+                const requestedWidth =
+                  aiPanelWidth + (event.key === 'ArrowLeft' ? 24 : -24);
+                const maxWidth = Math.min(720, Math.floor(window.innerWidth * 0.6));
+                const width = Math.max(340, Math.min(maxWidth, requestedWidth));
+                resizeAiPanel(width);
+                window.localStorage.setItem(
+                  'financial-reader-ai-width',
+                  String(width),
+                );
+              }}
+              className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize touch-none outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-px after:bg-transparent hover:after:bg-accent focus-visible:after:bg-accent"
+            />
             <AiPanel detail={detail} onCite={onCite} />
           </aside>
         )}
