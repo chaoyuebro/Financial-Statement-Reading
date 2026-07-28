@@ -25,6 +25,7 @@ interface Props {
 }
 
 const BASE_SCALE = 1.45;
+const MIN_OUTPUT_SCALE = 1.5;
 
 type Point = { x: number; y: number };
 type PdfAnnotation =
@@ -79,15 +80,15 @@ export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
         scale: BASE_SCALE * zoomRef.current,
         rotation: rotationRef.current,
       });
-      const outputScale = window.devicePixelRatio || 1;
+      const outputScale = Math.max(window.devicePixelRatio || 1, MIN_OUTPUT_SCALE);
 
       wrapper.style.width = `${viewport.width}px`;
       wrapper.style.height = `${viewport.height}px`;
       wrapper.innerHTML = '';
 
       const canvas = document.createElement('canvas');
-      canvas.width = Math.floor(viewport.width * outputScale);
-      canvas.height = Math.floor(viewport.height * outputScale);
+      canvas.width = Math.ceil(viewport.width * outputScale);
+      canvas.height = Math.ceil(viewport.height * outputScale);
       canvas.style.width = `${viewport.width}px`;
       canvas.style.height = `${viewport.height}px`;
       wrapper.appendChild(canvas);
@@ -95,13 +96,15 @@ export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
       const context = canvas.getContext('2d');
       if (context) {
         context.imageSmoothingQuality = 'high';
+        const scaleX = canvas.width / viewport.width;
+        const scaleY = canvas.height / viewport.height;
         await page.render({
           canvasContext: context,
           viewport,
           transform:
-            outputScale === 1
+            scaleX === 1 && scaleY === 1
               ? undefined
-              : [outputScale, 0, 0, outputScale, 0, 0],
+              : [scaleX, 0, 0, scaleY, 0, 0],
         }).promise;
       }
 
