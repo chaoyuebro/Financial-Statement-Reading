@@ -3,7 +3,8 @@
 仅监听 127.0.0.1 / 容器内网，Bearer 鉴权；供 Web BFF 调用。
 
 POST /internal/enqueue
-  body: {"report_id": "<uuid>", "stage"?: "download"|"parse"|..., "source"?: "...", "payload"?: {...}}
+  body: {"report_id": "<uuid>", "stage"?: "download"|"parse"|..., "source"?: "...",
+         "payload"?: {...}, "force"?: bool}
   - stage 缺省为 "download"（从下载阶段启动完整管线）
   - 返回 {"job_id": "<report_id>_<stage>", "created": bool}
 
@@ -145,9 +146,14 @@ class _Handler(BaseHTTPRequestHandler):
             return
         stage = data.get("stage") or "download"
         try:
-            job_id, created = pipeline.enqueue_stage(
-                report_id, stage, source=data.get("source"), payload=data.get("payload")
-            )
+            if data.get("force") is True:
+                job_id, created = pipeline.restart_pipeline(
+                    report_id, source=data.get("source"), payload=data.get("payload")
+                )
+            else:
+                job_id, created = pipeline.enqueue_stage(
+                    report_id, stage, source=data.get("source"), payload=data.get("payload")
+                )
         except Exception as e:  # noqa: BLE001
             self._send(409, {"error": str(e)})
             return

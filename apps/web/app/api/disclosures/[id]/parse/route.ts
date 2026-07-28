@@ -103,7 +103,7 @@ export async function POST(
   }
 
   // 2) 调用内部 Worker 入队端点（Bearer 鉴权）
-  let body: { stage?: string; source?: string; payload?: unknown } = {};
+  let body: { stage?: string; source?: string; payload?: unknown; force?: boolean } = {};
   try {
     body = await req.json();
   } catch {
@@ -124,6 +124,7 @@ export async function POST(
         stage,
         source: body.source,
         payload: body.payload,
+        force: body.force === true,
       }),
       // 内部调用不做长超时等待；不可达即 502
       signal: AbortSignal.timeout(10_000),

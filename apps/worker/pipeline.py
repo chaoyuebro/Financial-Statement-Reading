@@ -19,6 +19,8 @@ import db
 try:
     from redis import Redis
     from rq import Queue
+    from rq.exceptions import NoSuchJobError
+    from rq.job import Job
 
     _RQ_AVAILABLE = True
 except Exception:  # pragma: no cover — 入队仅在 worker 运行时需要
@@ -99,6 +101,24 @@ def enqueue_stage(
             timeout=config.JOB_TIMEOUTS.get(stage, 300),
         )
     return job_id, created
+
+
+def restart_pipeline(
+    report_id: str,
+    source: str | None = None,
+    payload: dict | None = None,
+) -> tuple[str, bool]:
+    """安全重置已结束任务，并从 download 阶段重新执行完整管线。"""
+    guard_can_parse(report_id)
+    q = _make_queue()
+    db.reset_parse_pipeline(report_id)
+    for stage in config.STAGES:
+        job_id = f"{report_id}_{stage}"
+        try:
+            Job.fetch(job_id, connection=q.connection).delete()
+        except NoSuchJobError:
+            pass
+    return enqueue_stage(report_id, "download", source=source, payload=payload)
 
 
 def run_stage(

@@ -34,6 +34,8 @@ export function AiPanel({
   );
   const [targetProgress, setTargetProgress] = useState(progress);
   const [progressMessage, setProgressMessage] = useState('等待开始解析');
+  const [parseSession, setParseSession] = useState(0);
+  const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -47,7 +49,7 @@ export function AiPanel({
   }, [targetProgress]);
 
   useEffect(() => {
-    if (['metrics_done', 'ready'].includes(detail.status)) return;
+    if (parseSession === 0 && ['metrics_done', 'ready'].includes(detail.status)) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -100,14 +102,48 @@ export function AiPanel({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [detail.id, detail.status]);
+  }, [detail.id, detail.status, parseSession]);
 
   const processing = !['metrics_done', 'ready'].includes(status);
 
+  const restartParsing = async () => {
+    if (restarting || processing) return;
+    setRestarting(true);
+    setParseError(null);
+    try {
+      const response = await fetch(`/api/disclosures/${detail.id}/parse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? '无法重新解析');
+      setProgress(0);
+      setTargetProgress(0);
+      setProgressMessage('正在重新解析');
+      setStatus('pending');
+      setParseSession((value) => value + 1);
+    } catch (error) {
+      setParseError(error instanceof Error ? error.message : '无法重新解析');
+    } finally {
+      setRestarting(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
-      <Header detail={{ ...detail, status }} />
+      <Header
+        detail={{ ...detail, status }}
+        onReparse={() => void restartParsing()}
+        showReparse={!processing}
+        restarting={restarting}
+      />
       <div className="flex-1 space-y-4 overflow-auto p-4">
+        {parseError && !processing && (
+          <p className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+            {parseError}
+          </p>
+        )}
         {processing ? (
           <Section title="报告解析">
             <div className="space-y-2">
@@ -148,10 +184,32 @@ export function AiPanel({
   );
 }
 
-function Header({ detail }: { detail: DisclosureDetail }) {
+function Header({
+  detail,
+  onReparse,
+  showReparse,
+  restarting,
+}: {
+  detail: DisclosureDetail;
+  onReparse: () => void;
+  showReparse: boolean;
+  restarting: boolean;
+}) {
   return (
     <div className="border-b border-line px-4 py-3">
-      <h2 className="text-sm font-semibold">AI 辅助</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">AI 辅助</h2>
+        {showReparse && (
+          <button
+            type="button"
+            onClick={onReparse}
+            disabled={restarting}
+            className="rounded-md border border-line px-2.5 py-1 text-xs text-ink-soft hover:border-accent hover:text-accent disabled:opacity-50"
+          >
+            {restarting ? '正在启动…' : '重新解析'}
+          </button>
+        )}
+      </div>
       <p className="mt-1 text-xs text-ink-soft">
         {TYPE_LABELS[detail.type]} · {detail.reportPeriod} · 状态 {STATUS_LABELS[detail.status]}
       </p>

@@ -162,6 +162,29 @@ def ensure_parse_job(
         put_conn(conn)
 
 
+def reset_parse_pipeline(report_id: str) -> None:
+    """重置已结束的解析管线，保留旧产物直到各阶段重新幂等覆盖。"""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT 1 FROM parse_jobs
+                   WHERE report_id=%s AND status IN ('pending', 'running')
+                   LIMIT 1""",
+                (report_id,),
+            )
+            if cur.fetchone():
+                raise RuntimeError("报告正在解析中，请勿重复提交")
+            cur.execute("DELETE FROM parse_jobs WHERE report_id=%s", (report_id,))
+            cur.execute("UPDATE reports SET status='pending' WHERE id=%s", (report_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        put_conn(conn)
+
+
 def update_parse_job(
     job_id: str,
     status: str,
