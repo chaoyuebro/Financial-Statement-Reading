@@ -22,13 +22,42 @@ export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
   const [searchMsg, setSearchMsg] = useState<string | null>(null);
   const [readerMode, setReaderMode] = useState<'native' | 'smart'>('native');
   const [aiPanelWidth, setAiPanelWidth] = useState(420);
+  const [smartOpened, setSmartOpened] = useState(false);
 
   useEffect(() => {
     const saved = Number(window.localStorage.getItem('financial-reader-ai-width'));
     if (Number.isFinite(saved) && saved >= 340 && saved <= 720) {
       setAiPanelWidth(saved);
     }
-  }, []);
+    const savedPage = Number(
+      window.sessionStorage.getItem(`financial-reader-page:${detail.id}`),
+    );
+    if (Number.isInteger(savedPage) && savedPage > 0) {
+      setCurrentPage(savedPage);
+    }
+    const savedMode = window.sessionStorage.getItem(
+      `financial-reader-mode:${detail.id}`,
+    );
+    if (savedMode === 'smart') {
+      setReaderMode('smart');
+      setSmartOpened(true);
+    }
+  }, [detail.id]);
+
+  const rememberPage = (page: number) => {
+    const safePage = Math.max(1, Math.round(page));
+    setCurrentPage(safePage);
+    window.sessionStorage.setItem(
+      `financial-reader-page:${detail.id}`,
+      String(safePage),
+    );
+  };
+
+  const changeReaderMode = (mode: 'native' | 'smart') => {
+    setReaderMode(mode);
+    if (mode === 'smart') setSmartOpened(true);
+    window.sessionStorage.setItem(`financial-reader-mode:${detail.id}`, mode);
+  };
 
   const resizeAiPanel = (nextWidth: number) => {
     const maxWidth = Math.min(720, Math.floor(window.innerWidth * 0.6));
@@ -63,7 +92,7 @@ export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
   };
 
   const jump = (page: number) => {
-    setCurrentPage(page);
+    rememberPage(page);
     if (readerMode === 'smart') viewerRef.current?.scrollToPage(page);
   };
 
@@ -75,7 +104,7 @@ export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
 
   // 引用跳页+高亮（§7.3 / §8.2）：先滚到引用页，再在该页文本层高亮命中片段
   const onCite = (page: number, text: string) => {
-    setCurrentPage(page);
+    rememberPage(page);
     if (readerMode === 'native') return;
     viewerRef.current?.scrollToPage(page);
     // 等待目标页文本层渲染后再高亮（pdf.js 异步）
@@ -112,7 +141,7 @@ export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
             <button
               type="button"
               onClick={() => {
-                setReaderMode('native');
+                changeReaderMode('native');
                 setAiOpen(false);
               }}
               className={`rounded px-2.5 py-1 text-sm ${readerMode === 'native' ? 'bg-accent text-white' : 'hover:bg-accent-soft'}`}
@@ -121,7 +150,7 @@ export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => setReaderMode('smart')}
+              onClick={() => changeReaderMode('smart')}
               className={`rounded px-2.5 py-1 text-sm ${readerMode === 'smart' ? 'bg-accent text-white' : 'hover:bg-accent-soft'}`}
             >
               智能阅读
@@ -188,15 +217,19 @@ export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
               ref={viewerRef}
               url={pdfUrl}
               initialPage={currentPage}
-              onPageChange={setCurrentPage}
+              onPageChange={rememberPage}
               onNumPages={setNumPages}
             />
           )}
         </main>
 
-        {readerMode === 'smart' && (
+        {smartOpened && (
           <aside
-            className="relative hidden shrink-0 border-l border-line bg-surface lg:block"
+            className={
+              readerMode === 'smart'
+                ? 'relative hidden shrink-0 border-l border-line bg-surface lg:block'
+                : 'hidden'
+            }
             style={{ width: aiPanelWidth }}
           >
             <div

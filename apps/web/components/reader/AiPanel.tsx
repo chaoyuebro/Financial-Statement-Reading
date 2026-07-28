@@ -39,6 +39,20 @@ export function AiPanel({
   const [activeView, setActiveView] = useState<'main' | 'metrics' | 'analysis'>('main');
 
   useEffect(() => {
+    const saved = window.sessionStorage.getItem(
+      `financial-reader-ai-view:${detail.id}`,
+    );
+    if (saved === 'main' || saved === 'metrics' || saved === 'analysis') {
+      setActiveView(saved);
+    }
+  }, [detail.id]);
+
+  const changeActiveView = (view: 'main' | 'metrics' | 'analysis') => {
+    setActiveView(view);
+    window.sessionStorage.setItem(`financial-reader-ai-view:${detail.id}`, view);
+  };
+
+  useEffect(() => {
     const timer = setInterval(() => {
       setProgress((current) => {
         if (current >= targetProgress) return current;
@@ -180,7 +194,7 @@ export function AiPanel({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setActiveView('metrics')}
+                    onClick={() => changeActiveView('metrics')}
                     className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2.5 text-sm hover:border-accent hover:bg-accent-soft/40"
                   >
                     <span>关键指标</span>
@@ -188,7 +202,7 @@ export function AiPanel({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveView('analysis')}
+                    onClick={() => changeActiveView('analysis')}
                     className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2.5 text-sm hover:border-accent hover:bg-accent-soft/40"
                   >
                     <span>AI 深度分析</span>
@@ -201,7 +215,7 @@ export function AiPanel({
               <>
                 <button
                   type="button"
-                  onClick={() => setActiveView('main')}
+                  onClick={() => changeActiveView('main')}
                   className="self-start text-xs text-accent hover:underline"
                 >
                   ← 返回报告问答
