@@ -136,6 +136,40 @@ def test_structured_table_preferred_and_unit_converted():
     assert rows["op_cash_flow"]["yoy"] == -11.84
 
 
+def test_llm_review_can_only_accept_or_reject_existing_candidates():
+    rows = metrics.extract_metrics([(1, PAGE1)])
+
+    def reviewer(_system, _user):
+        return (
+            '{"decisions":['
+            '{"name":"revenue","accepted":true,"reason":"原文一致"},'
+            '{"name":"net_profit_attr","accepted":false,"reason":"列含义不明确"},'
+            '{"name":"invented","accepted":true,"reason":"无效指标"}]}'
+        )
+
+    reviewed, meta = metrics.review_metrics_with_llm([(1, PAGE1)], rows, reviewer)
+    by_name = _by_name(reviewed)
+    assert "revenue" in by_name
+    assert by_name["revenue"]["value"] == 12_345_678_901.23
+    assert by_name["revenue"]["confidence"] == 0.95
+    assert "net_profit_attr" not in by_name
+    assert "invented" not in by_name
+    assert meta["status"] == "reviewed"
+
+
+def test_llm_review_failure_falls_back_to_rules():
+    rows = metrics.extract_metrics([(1, PAGE1)])
+
+    def broken_reviewer(_system, _user):
+        raise RuntimeError("network unavailable")
+
+    reviewed, meta = metrics.review_metrics_with_llm(
+        [(1, PAGE1)], rows, broken_reviewer
+    )
+    assert reviewed == rows
+    assert meta["status"] == "fallback"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0

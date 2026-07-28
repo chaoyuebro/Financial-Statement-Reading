@@ -70,3 +70,14 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "512"))
 EMBEDDING_CACHE_DIR = os.getenv("EMBEDDING_CACHE_DIR", "/models/fastembed")
 # P1 可切换不同维度模型——必须为该模型新建独立向量列与索引（§6.4），不得混用同一列
+
+# ---- 关键指标大模型复核（规则抽取后、写库前）----
+LLM_API_STYLE = os.getenv("LLM_API_STYLE", "")
+LLM_API_BASE = os.getenv("LLM_API_BASE", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+METRICS_LLM_REVIEW = os.getenv("METRICS_LLM_REVIEW", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
