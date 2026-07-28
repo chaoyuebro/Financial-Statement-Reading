@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DisclosureDetail, TYPE_LABELS } from '@fr/shared';
 import { PdfViewer, PdfViewerHandle } from './PdfViewer';
 import { TocPanel } from './TocPanel';
@@ -44,14 +44,14 @@ export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
     }
   }, [detail.id]);
 
-  const rememberPage = (page: number) => {
+  const rememberPage = useCallback((page: number) => {
     const safePage = Math.max(1, Math.round(page));
     setCurrentPage(safePage);
     window.sessionStorage.setItem(
       `financial-reader-page:${detail.id}`,
       String(safePage),
     );
-  };
+  }, [detail.id]);
 
   const changeReaderMode = (mode: 'native' | 'smart') => {
     setReaderMode(mode);
