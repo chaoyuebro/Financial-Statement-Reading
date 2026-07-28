@@ -36,6 +36,7 @@ export function AiPanel({
   const [progressMessage, setProgressMessage] = useState('等待开始解析');
   const [parseSession, setParseSession] = useState(0);
   const [restarting, setRestarting] = useState(false);
+  const [activeView, setActiveView] = useState<'main' | 'summary'>('main');
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -138,7 +139,7 @@ export function AiPanel({
         showReparse={!processing}
         restarting={restarting}
       />
-      <div className="flex-1 space-y-4 overflow-auto p-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
         {parseError && !processing && (
           <p className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
             {parseError}
@@ -174,9 +175,33 @@ export function AiPanel({
           </Section>
         ) : (
           <>
-            <MetricsSection reportId={detail.id} onCite={onCite} />
-            <SummarySection reportId={detail.id} onCite={onCite} />
-            <ChatSection reportId={detail.id} onCite={onCite} />
+            {activeView === 'main' ? (
+              <>
+                <MetricsSection reportId={detail.id} onCite={onCite} />
+                <button
+                  type="button"
+                  onClick={() => setActiveView('summary')}
+                  className="flex w-full items-center justify-between rounded-lg border border-line bg-surface px-3 py-2.5 text-sm hover:border-accent hover:bg-accent-soft/40"
+                >
+                  <span>查看一键摘要</span>
+                  <span className="text-accent" aria-hidden>
+                    →
+                  </span>
+                </button>
+                <ChatSection reportId={detail.id} onCite={onCite} />
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveView('main')}
+                  className="self-start text-xs text-accent hover:underline"
+                >
+                  ← 返回关键指标与问答
+                </button>
+                <SummarySection reportId={detail.id} onCite={onCite} />
+              </>
+            )}
           </>
         )}
       </div>
@@ -420,8 +445,15 @@ function ChatSection({ reportId, onCite }: { reportId: string; onCite: CitationJ
   }, [busy, msgs, q, reportId]);
 
   return (
-    <Section title="问答">
-      <div ref={scrollRef} className="max-h-64 space-y-2 overflow-auto" aria-live="polite">
+    <section
+      aria-label="报告问答"
+      className="flex min-h-[320px] flex-1 flex-col"
+    >
+      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-soft">
+        报告问答
+      </h3>
+      <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-line p-3">
+      <div ref={scrollRef} className="min-h-[180px] flex-1 space-y-2 overflow-auto" aria-live="polite">
         {msgs.length === 0 && (
           <p className="text-xs text-ink-soft">支持「营收」「经营现金流」「同比」等问题，回答附页码引用。</p>
         )}
@@ -457,20 +489,27 @@ function ChatSection({ reportId, onCite }: { reportId: string; onCite: CitationJ
         {err && <p className="text-xs text-rose-600">{err}</p>}
       </div>
       <form
-        className="mt-2 flex gap-1"
+        className="mt-3 flex items-end gap-2 border-t border-line pt-3"
         onSubmit={(e) => {
           e.preventDefault();
           void ask();
         }}
       >
-        <input
+        <textarea
           value={q}
           onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              void ask();
+            }
+          }}
           placeholder="例如：本期营业收入与上年同期相比如何？"
           aria-label="输入问题"
           disabled={busy}
           maxLength={500}
-          className="flex-1 rounded-md border border-line bg-surface px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+          rows={3}
+          className="min-h-[76px] flex-1 resize-y rounded-md border border-line bg-surface px-3 py-2 text-sm leading-relaxed outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
         />
         <button
           type="submit"
@@ -480,7 +519,8 @@ function ChatSection({ reportId, onCite }: { reportId: string; onCite: CitationJ
           提问
         </button>
       </form>
-    </Section>
+      </div>
+    </section>
   );
 }
 
