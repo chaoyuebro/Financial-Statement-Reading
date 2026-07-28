@@ -243,6 +243,14 @@ def _run_embed(report_id: str, source: str, payload: dict) -> dict:
 
 
 def _run_metrics(report_id: str, source: str, payload: dict) -> dict:
+    import analysis
     import metrics
 
-    return metrics.run_metrics(report_id, source, payload)
+    result = metrics.run_metrics(report_id, source, payload)
+    db.update_parse_job(
+        f"{report_id}_metrics",
+        "running",
+        progress=96,
+        progress_message="正在生成 AI 深度分析",
+    )
+    return {**result, **analysis.run_analysis(report_id)}

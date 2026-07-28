@@ -22,6 +22,7 @@ interface ReportMetaRow {
   company_code: string;
   report_period: string;
   status: string;
+  version_tag: string;
 }
 
 interface AnalysisSection {
@@ -49,16 +50,61 @@ function parseSections(content: string): AnalysisSection[] {
   });
 }
 
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+interface CachedAnalysisRow {
+  points: SummaryPoint[];
+  model: string | null;
+  generated_at: string | Date;
+}
+
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const meta = await dbQuery<ReportMetaRow>(
-    `SELECT c.name AS company_name, c.code AS company_code, r.report_period, r.status
+    `SELECT c.name AS company_name, c.code AS company_code, r.report_period, r.status,
+            COALESCE(
+              (SELECT d.source || ':' || d.source_announcement_id
+               FROM disclosures d
+               WHERE d.report_id=r.id
+               ORDER BY d.is_current_version DESC, d.is_primary_source DESC, d.created_at DESC
+               LIMIT 1),
+              r.primary_source || ':unknown'
+            ) AS version_tag
      FROM reports r JOIN companies c ON c.code = r.company_code WHERE r.id = $1`,
     [params.id],
   );
   if (meta.length === 0) {
     return Response.json({ error: 'not_found', id: params.id }, { status: 404 });
   }
-  if (!new Set(['parsed', 'embedded', 'metrics_done', 'ready']).has(meta[0].status)) {
+  const refresh = req.nextUrl.searchParams.get('refresh') === '1';
+  if (refresh) {
+    const expected = `Bearer ${process.env.WORKER_API_TOKEN ?? ''}`;
+    if (!process.env.WORKER_API_TOKEN || req.headers.get('authorization') !== expected) {
+      return Response.json({ error: 'unauthorized' }, { status: 401 });
+    }
+  } else {
+    const cached = await dbQuery<CachedAnalysisRow>(
+      `SELECT points, model, generated_at
+       FROM report_analyses WHERE report_id=$1 AND version_tag=$2`,
+      [params.id, meta[0].version_tag],
+    );
+    if (cached.length > 0) {
+      const body: SummaryResponse = {
+        reportId: params.id,
+        points: cached[0].points,
+        generatedAt: new Date(cached[0].generated_at).toISOString(),
+        model: cached[0].model,
+        fromMetrics: false,
+      };
+      return Response.json(body);
+    }
+    return Response.json(
+      {
+        error: 'analysis_not_cached',
+        message: '该报告尚未生成深度分析，请点击“重新解析”生成',
+      },
+      { status: 404 },
+    );
+  }
+
+  if (!new Set(['extracting', 'metrics_done', 'ready']).has(meta[0].status)) {
     return Response.json(
       { error: 'not_ready', message: '报告尚未解析完成' },
       { status: 409 },
@@ -155,6 +201,16 @@ ${context}`;
       model: result.model ?? cfg.model,
       fromMetrics: false,
     };
+    await dbQuery(
+      `INSERT INTO report_analyses (report_id, version_tag, points, model, generated_at)
+       VALUES ($1, $2, $3::jsonb, $4, now())
+       ON CONFLICT (report_id) DO UPDATE SET
+         version_tag=EXCLUDED.version_tag,
+         points=EXCLUDED.points,
+         model=EXCLUDED.model,
+         generated_at=now()`,
+      [params.id, meta[0].version_tag, JSON.stringify(points), body.model],
+    );
     return Response.json(body);
   } catch (error) {
     return Response.json(

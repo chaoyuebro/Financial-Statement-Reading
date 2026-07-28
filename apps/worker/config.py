@@ -81,3 +81,4 @@ METRICS_LLM_REVIEW = os.getenv("METRICS_LLM_REVIEW", "true").lower() in (
     "true",
     "yes",
 )
+WEB_APP_URL = os.getenv("WEB_APP_URL", "http://web:3000")

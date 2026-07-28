@@ -126,6 +126,7 @@ services:
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       METRICS_LLM_REVIEW: ${METRICS_LLM_REVIEW:-true}
+      WEB_APP_URL: http://web:3000
       # 扁平模块导入 + RQ 任务 pipeline.run_stage 解析所需
       PYTHONPATH: /app/apps/worker
       # 内部入队端点：容器内网监听(web BFF 经 worker:8000 访问)，不暴露到宿主机
