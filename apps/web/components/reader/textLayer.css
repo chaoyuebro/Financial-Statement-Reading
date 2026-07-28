@@ -4,7 +4,9 @@
   overflow: hidden;
   line-height: 1;
   opacity: 1;
+  isolation: isolate;
   text-size-adjust: none;
+  forced-color-adjust: none;
   transform-origin: 0 0;
   pointer-events: auto;
 }
@@ -13,6 +15,8 @@
 .pdf-page-wrapper .textLayer br {
   position: absolute;
   color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
   white-space: pre;
   cursor: text;
   transform-origin: 0 0;
