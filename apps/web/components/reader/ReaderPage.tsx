@@ -9,10 +9,11 @@ import { AiPanel } from './AiPanel';
 interface Props {
   detail: DisclosureDetail;
   pdfUrl: string;
+  returnTo: string;
 }
 
 // 阅读页三栏布局（§8.1）：目录 / PDF / AI 面板；桌面三栏，移动端 AI 收为底部抽屉
-export function ReaderPage({ detail, pdfUrl }: Props) {
+export function ReaderPage({ detail, pdfUrl, returnTo }: Props) {
   const viewerRef = useRef<PdfViewerHandle>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [numPages, setNumPages] = useState(0);
@@ -59,7 +60,7 @@ export function ReaderPage({ detail, pdfUrl }: Props) {
     <div className="flex h-screen flex-col bg-surface-muted text-ink">
       <header className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3">
         <div className="min-w-0">
-          <a href="/" className="text-xs text-accent hover:underline">
+          <a href={returnTo} className="text-xs text-accent hover:underline">
             ← 返回列表
           </a>
           <h1 className="truncate text-base font-semibold">

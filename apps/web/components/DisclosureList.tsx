@@ -105,9 +105,13 @@ function DisclosureListInner({ items, hasMore }: Props) {
       const item = rows[index];
       if (!item) return;
       setActive(index);
-      router.push(`/reader/${encodeURIComponent(item.id)}`);
+      const query = searchParams.toString();
+      const returnTo = query ? `/?${query}` : '/';
+      router.push(
+        `/reader/${encodeURIComponent(item.id)}?returnTo=${encodeURIComponent(returnTo)}`,
+      );
     },
-    [rows, router],
+    [rows, router, searchParams],
   );
 
   if (rows.length === 0) {

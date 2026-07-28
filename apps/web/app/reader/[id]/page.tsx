@@ -5,7 +5,21 @@ import { ReaderPage } from '@/components/reader/ReaderPage';
 // 阅读页（§7.1 / §8.1）：SSR 取报告详情 + toc，交客户端三栏组件渲染
 export const dynamic = 'force-dynamic';
 
-export default async function ReaderRoute({ params }: { params: { id: string } }) {
+function safeReturnTo(value: string | string[] | undefined): string {
+  if (typeof value !== 'string') return '/';
+  if (value === '/' || (value.startsWith('/?') && !value.startsWith('//'))) {
+    return value;
+  }
+  return '/';
+}
+
+export default async function ReaderRoute({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { returnTo?: string | string[] };
+}) {
   const detail = await getDisclosureDetail(params.id);
   if (!detail) notFound();
 
@@ -19,5 +33,11 @@ export default async function ReaderRoute({ params }: { params: { id: string } }
     ? `/api/disclosures/${params.id}/pdf?devFixture=${encodeURIComponent(devFixture)}`
     : `/api/disclosures/${params.id}/pdf`;
 
-  return <ReaderPage detail={detail} pdfUrl={pdfUrl} />;
+  return (
+    <ReaderPage
+      detail={detail}
+      pdfUrl={pdfUrl}
+      returnTo={safeReturnTo(searchParams.returnTo)}
+    />
+  );
 }
