@@ -28,6 +28,7 @@ const BASE_SCALE = 1.45;
 const MIN_OUTPUT_SCALE = 1.5;
 
 type Point = { x: number; y: number };
+type PageEstimate = { width: number; height: number };
 type PdfAnnotation =
   | { type: 'draw'; points: Point[] }
   | { type: 'signature'; x: number; y: number; text: string }
@@ -56,6 +57,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
   const pendingImageRef = useRef('');
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [numPages, setNumPages] = useState(0);
+  const [pageEstimate, setPageEstimate] = useState<PageEstimate | null>(null);
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [pageInput, setPageInput] = useState(String(initialPage));
   const [zoom, setZoom] = useState(1);
@@ -261,6 +263,15 @@ export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
           return;
         }
         docRef.current = doc;
+        const firstPage = await doc.getPage(1);
+        const firstViewport = firstPage.getViewport({
+          scale: BASE_SCALE * zoomRef.current,
+          rotation: rotationRef.current,
+        });
+        setPageEstimate({
+          width: firstViewport.width,
+          height: firstViewport.height,
+        });
         setNumPages(doc.numPages);
         onNumPages?.(doc.numPages);
         setLoading(false);
@@ -300,10 +311,17 @@ export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
     pageEls.current.forEach((page) => {
       page.dataset.rendered = '0';
       page.innerHTML = '';
-      page.style.width = '';
-      page.style.height = '';
     });
-    void renderPage(currentPage);
+    const doc = docRef.current;
+    if (!doc) return;
+    void doc.getPage(1).then((firstPage) => {
+      const viewport = firstPage.getViewport({
+        scale: BASE_SCALE * zoomRef.current,
+        rotation: rotationRef.current,
+      });
+      setPageEstimate({ width: viewport.width, height: viewport.height });
+      void renderPage(currentPage);
+    });
   }, [renderPage, rotation, zoom]);
 
   useEffect(() => {
@@ -546,7 +564,11 @@ export const PdfViewer = forwardRef<PdfViewerHandle, Props>(function PdfViewer(
               else pageEls.current.delete(page);
             }}
             className="pdf-page-wrapper relative mx-auto mb-3 bg-white shadow"
-            style={{ minHeight: 1000 }}
+            style={{
+              width: pageEstimate?.width,
+              height: pageEstimate?.height,
+              minHeight: pageEstimate?.height ?? 1000,
+            }}
           />
         ))}
       </div>
