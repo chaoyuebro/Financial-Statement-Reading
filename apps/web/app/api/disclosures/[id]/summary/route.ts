@@ -24,20 +24,29 @@ interface ReportMetaRow {
   status: string;
 }
 
-interface AnalysisPayload {
-  sections?: {
-    title?: string;
-    analysis?: string;
-    pages?: number[];
-  }[];
+interface AnalysisSection {
+  title: string;
+  analysis: string;
+  pages: number[];
 }
 
-function parseJson(content: string): AnalysisPayload {
-  const cleaned = content
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/, '');
-  return JSON.parse(cleaned) as AnalysisPayload;
+function parseSections(content: string): AnalysisSection[] {
+  return SECTION_TITLES.map((title) => {
+    const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(
+      `<SECTION\\s+title=["']${escaped}["']>\\s*([\\s\\S]*?)\\s*<PAGES>\\s*([\\d,，、\\s]*)</PAGES>\\s*</SECTION>`,
+    );
+    const match = pattern.exec(content);
+    if (!match?.[1]?.trim()) throw new Error(`missing section: ${title}`);
+    return {
+      title,
+      analysis: match[1].trim(),
+      pages: match[2]
+        .split(/[,，、\s]+/)
+        .filter(Boolean)
+        .map(Number),
+    };
+  });
 }
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -101,20 +110,22 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 - 只能引用参考资料中的事实；证据不足必须明确写“报告资料未充分披露”。
 - pages 只能填写参考资料中真实出现的 page 编号。
 - 每项分析控制在 80～180 个汉字。
-- 仅输出 JSON，不要 Markdown，不要额外说明：
-{"sections":[{"title":"核心结论","analysis":"分析内容","pages":[1,2]}]}
-必须按指定的五个标题输出，不能增加或删除标题。
+- 不要输出 JSON 或 Markdown，也不要输出额外说明。
+- 必须严格按以下固定标记输出五段，页码用逗号分隔；没有证据页则保留空的 PAGES：
+<SECTION title="核心结论">
+分析内容
+<PAGES>1,2</PAGES>
+</SECTION>
+- 五个 SECTION 的 title 必须依次使用指定的五个标题，不能增加、删除或改名。
 参考资料：
 ${context}`;
   const user = `请分析${meta[0].company_name}（${meta[0].company_code}）${meta[0].report_period}报告。`;
 
   try {
     const result = await chatComplete(cfg, system, user);
-    const payload = parseJson(result.choices?.[0]?.message?.content ?? '');
+    const sections = parseSections(result.choices?.[0]?.message?.content ?? '');
     const allowedPages = new Set(chunks.map((chunk) => chunk.page));
-    const byTitle = new Map(
-      (payload.sections ?? []).map((section) => [section.title, section]),
-    );
+    const byTitle = new Map(sections.map((section) => [section.title, section]));
     const points: SummaryPoint[] = SECTION_TITLES.map((title) => {
       const section = byTitle.get(title);
       const analysis = section?.analysis?.trim();
