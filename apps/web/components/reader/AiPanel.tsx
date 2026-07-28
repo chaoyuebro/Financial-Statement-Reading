@@ -66,7 +66,8 @@ export function AiPanel({
         setTargetProgress((current) => Math.max(current, nextProgress));
         if (data.progressMessage) setProgressMessage(data.progressMessage);
         if (data.status === 'metrics_done') {
-          window.location.reload();
+          setTargetProgress(100);
+          setProgressMessage('报告解析完成');
           return;
         }
         if (data.status === 'failed') {
